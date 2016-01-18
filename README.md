@@ -1,0 +1,307 @@
+# PvlNostradamusDistributor
+
+Nostradamus Distributor micro-benchmarks for various CPU architectures.
+
+September 3, 2008.
+Copyright (C) 2008 by Darek Mihocka. All Rights Reserved.
+Translation to Delphi XE6 by Patrick van Logchem.
+
+These are micro-benchmarks of a simple fake x86 interpreter which supports a
+handful of simple micro-ops. The test 'code' constists of two decoded blocks
+of micro-ops, each of length 9. The 9 micro-ops in each of the blocks are
+slightly different to trip up the branch predictors.
+
+Out of many dozens of variations I tested, I have narrowed it down to 15
+versions of the dispatch code. Some are simply rolled up loops, some are
+unrolled loops, some consist of multiple unrolled loops. They are labelled
+versions "a" through "o", as explained below.
+
+Each set of results is for a particular CPU architecture at the clock frequency
+shown. For any given result, multiply the MIPS number by 6 to calculate the
+approximate peak "millions of guest instructions" throughput of that scheme,
+or multiply by 9 to calculate "millions of guest micro-ops". Similarly, divide
+the clock cycle column by 6 or 9 to get the approximate clock cycle cost per
+guest instruction or guest micro-op.
+
+The "simulated loop" result is for the hand-coded assembly handler-chaining
+implementation, which would be similar to a calculated goto's implementation.
+
+Version "f" is the classic rolled up trace cache loop and generally runs
+poorly. Versions "a" and "b" and "d" are similar variants and also generally
+do poorly.
+
+Version "e" is the unrolled version of "f", length 9. It does better but will
+suffer from mispredicts on most CPU architecture that cannot do A-B-A-B style
+of prediction.
+
+Version "c" is the software-pipelined version of "e", also length 9. It can do
+slightly better than "e" since the explicit data dependency is removed and so
+this will shave a few cycles even in the branch mispredict cases.
+
+These next ones are all similar to version "c" but shorter unrolling lengths:
+
+Version "g" is software-pipelined unrolled loop, length 2.
+Version "h" is software-pipelined unrolled loop, length 3.
+Version "i" is software-pipelined unrolled loop, length 4.
+Version "j" is software-pipelined unrolled loop, length 5.
+Version "k" is software-pipelined unrolled loop, length 6.
+
+It is interesting how these mostly wreak havok on the CPU branch predictors
+since their unrolled sizes are mismatched with the trace length of 9. However,
+the Core 2's multi-target history can handle unrolled loops of 3 and 6, since
+that gives the predictors short repeating patterns. What this shows it that
+just arbitrarily unrolling a loop by a small amount serves little purpose.
+
+Version "l" uses two unrolled loops of length 9, and chooses between them for
+the two test blocks. This results in more perfect prediction, but because the
+code is so dense, may suffer from branch misprediction on CPU architectures
+that require 16-byte spacing between indirect calls.
+
+Version "m" is "l" with explicit inline assembly to inject an 8-byte NOP
+between indirect calls to improve the branch prediction.
+
+Version "n" is the Nostradamus Distributor with explicit updating of the
+descriptor pointer between indirect calls.
+
+Version "o" is the final Nostradamus Distributor. For each CPU I calculate the
+approximate "millions of guest instructions" per second execution rate for the
+final Nostradamus Distributor test code.
+
+All tests compiled either with Microsoft's Visual Studio 2003 C++ compiler and
+tested on Windows Vista, or are compiled with gcc and tested on Fedora Linux 9
+or on Mac OS X 10.5.4 as indicated.
+
+===============================================================================
+
+Intel Core 2 Xeon in Mac Pro, 2666 MHz, VS2003 compiler:
+
+x86 native loop    :     230 ms,      2395 ps/instr,    417 MIPS,       6.3 clk
+x86 simulated loop :    2334 ms,     24312 ps/instr,     41 MIPS,      64.8 clk
+x86 sim in C ver a :    2344 ms,     24416 ps/instr,     40 MIPS,      65.0 clk
+x86 sim in C ver b :    2011 ms,     20947 ps/instr,     47 MIPS,      55.8 clk
+x86 sim in C ver c :    1673 ms,     17427 ps/instr,     57 MIPS,      46.4 clk
+x86 sim in C ver d :    6471 ms,     67406 ps/instr,     14 MIPS,     179.7 clk
+x86 sim in C ver e :    1940 ms,     20208 ps/instr,     49 MIPS,      53.8 clk
+x86 sim in C ver f :    2343 ms,     24406 ps/instr,     40 MIPS,      65.0 clk
+x86 sim in C ver g :    3084 ms,     32125 ps/instr,     31 MIPS,      85.6 clk
+x86 sim in C ver h :    1832 ms,     19083 ps/instr,     52 MIPS,      50.8 clk
+x86 sim in C ver i :    5970 ms,     62187 ps/instr,     16 MIPS,     165.7 clk
+x86 sim in C ver j :    1795 ms,     18697 ps/instr,     53 MIPS,      49.8 clk
+x86 sim in C ver k :    2169 ms,     22593 ps/instr,     44 MIPS,      60.2 clk
+x86 sim in C ver l :    1677 ms,     17468 ps/instr,     57 MIPS,      46.5 clk
+x86 sim in C ver m :    1648 ms,     17166 ps/instr,     58 MIPS,      45.7 clk
+x86 sim in C ver n :    1771 ms,     18447 ps/instr,     54 MIPS,      49.1 clk
+x86 sim in C ver o :    1692 ms,     17625 ps/instr,     56 MIPS,      46.9 clk
+
+Peak guest instruction simulation rate at 2666 MHz = ~341 MIPS.
+
+===============================================================================
+
+Intel Core 2 Xeon in Mac Pro, 2666 MHz, Cygwin gcc 3.4 compiler:
+
+x86 sim in C ver a :    5194 ms,     54104 ps/instr,     18 MIPS,     144.2 clk
+x86 sim in C ver b :    4571 ms,     47614 ps/instr,     21 MIPS,     126.9 clk
+x86 sim in C ver c :    1810 ms,     18854 ps/instr,     53 MIPS,      50.2 clk
+x86 sim in C ver d :   10452 ms,    108875 ps/instr,      9 MIPS,     290.2 clk
+x86 sim in C ver e :    1887 ms,     19656 ps/instr,     50 MIPS,      52.4 clk
+x86 sim in C ver f :    4540 ms,     47291 ps/instr,     21 MIPS,     126.0 clk
+x86 sim in C ver g :    1997 ms,     20802 ps/instr,     48 MIPS,      55.4 clk
+x86 sim in C ver h :    1747 ms,     18197 ps/instr,     54 MIPS,      48.5 clk
+x86 sim in C ver i :    8689 ms,     90510 ps/instr,     11 MIPS,     241.3 clk
+x86 sim in C ver j :    5679 ms,     59156 ps/instr,     16 MIPS,     157.7 clk
+x86 sim in C ver k :    9095 ms,     94739 ps/instr,     10 MIPS,     252.5 clk
+x86 sim in C ver l :    1794 ms,     18687 ps/instr,     53 MIPS,      49.8 clk
+x86 sim in C ver m :    1794 ms,     18687 ps/instr,     53 MIPS,      49.8 clk
+x86 sim in C ver n :    1716 ms,     17875 ps/instr,     55 MIPS,      47.6 clk
+x86 sim in C ver o :    1732 ms,     18041 ps/instr,     55 MIPS,      48.0 clk
+
+Peak guest instruction simulation rate at 2666 MHz = ~333 MIPS.
+
+===============================================================================
+
+Intel Core 2 Xeon in Mac Pro, 2666 MHz, Mac OS X Xcode 3.1 gcc 4.2 compiler,
+with additional -mdynamic-no-pic -momit-leaf-frame-pointer compiler switches:
+
+x86 sim in C ver a :    5312 ms,     55333 ps/instr,     18 MIPS,     147.5 clk
+x86 sim in C ver b :    5782 ms,     60229 ps/instr,     16 MIPS,     160.5 clk
+x86 sim in C ver c :    1826 ms,     19020 ps/instr,     52 MIPS,      50.7 clk
+x86 sim in C ver d :    7386 ms,     76937 ps/instr,     12 MIPS,     205.1 clk
+x86 sim in C ver e :    1866 ms,     19437 ps/instr,     51 MIPS,      51.8 clk
+x86 sim in C ver f :    4621 ms,     48135 ps/instr,     20 MIPS,     128.3 clk
+x86 sim in C ver g :    3743 ms,     38989 ps/instr,     25 MIPS,     103.9 clk
+x86 sim in C ver h :    1967 ms,     20489 ps/instr,     48 MIPS,      54.6 clk
+x86 sim in C ver i :    3221 ms,     33552 ps/instr,     29 MIPS,      89.4 clk
+x86 sim in C ver j :    2087 ms,     21739 ps/instr,     45 MIPS,      57.9 clk
+x86 sim in C ver k :    8465 ms,     88177 ps/instr,     11 MIPS,     235.0 clk
+x86 sim in C ver l :    1769 ms,     18427 ps/instr,     54 MIPS,      49.1 clk
+x86 sim in C ver m :    1769 ms,     18427 ps/instr,     54 MIPS,      49.1 clk
+x86 sim in C ver n :    1932 ms,     20125 ps/instr,     49 MIPS,      53.6 clk
+x86 sim in C ver o :    1931 ms,     20114 ps/instr,     49 MIPS,      53.6 clk
+
+Peak guest instruction simulation rate at 2666 MHz = ~298 MIPS.
+
+===============================================================================
+
+AMD Phenom 9750, 2400 MHz, VS2003 compiler:
+
+x86 native loop    :     314 ms,      3270 ps/instr,    305 MIPS,       7.8 clk
+x86 simulated loop :    3914 ms,     40770 ps/instr,     24 MIPS,      97.8 clk
+x86 sim in C ver a :    5280 ms,     55000 ps/instr,     18 MIPS,     132.0 clk
+x86 sim in C ver b :    5359 ms,     55822 ps/instr,     17 MIPS,     133.9 clk
+x86 sim in C ver c :    5764 ms,     60041 ps/instr,     16 MIPS,     144.1 clk
+x86 sim in C ver d :    9024 ms,     94000 ps/instr,     10 MIPS,     225.6 clk
+x86 sim in C ver e :    6385 ms,     66510 ps/instr,     15 MIPS,     159.6 clk
+x86 sim in C ver f :    6058 ms,     63104 ps/instr,     15 MIPS,     151.4 clk
+x86 sim in C ver g :    5372 ms,     55958 ps/instr,     17 MIPS,     134.3 clk
+x86 sim in C ver h :    6466 ms,     67354 ps/instr,     14 MIPS,     161.6 clk
+x86 sim in C ver i :    6692 ms,     69708 ps/instr,     14 MIPS,     167.3 clk
+x86 sim in C ver j :    7077 ms,     73718 ps/instr,     13 MIPS,     176.9 clk
+x86 sim in C ver k :    6963 ms,     72531 ps/instr,     13 MIPS,     174.0 clk
+x86 sim in C ver l :    2333 ms,     24302 ps/instr,     41 MIPS,      58.3 clk
+x86 sim in C ver m :    2243 ms,     23364 ps/instr,     42 MIPS,      56.0 clk
+x86 sim in C ver n :    2549 ms,     26552 ps/instr,     37 MIPS,      63.7 clk
+x86 sim in C ver o :    2239 ms,     23322 ps/instr,     42 MIPS,      55.9 clk
+
+Peak guest instruction simulation rate at 2400 MHz = ~258 MIPS.
+
+===============================================================================
+
+AMD Athlon64, 2400 MHZ, Cygwin gcc 3.4 compiler:
+
+x86 sim in C ver a :    9842 ms,    102520 ps/instr,      9 MIPS,     246.0 clk
+x86 sim in C ver b :    9379 ms,     97697 ps/instr,     10 MIPS,     234.4 clk
+x86 sim in C ver c :    8539 ms,     88947 ps/instr,     11 MIPS,     213.4 clk
+x86 sim in C ver d :   13505 ms,    140677 ps/instr,      7 MIPS,     337.6 clk
+x86 sim in C ver e :    9019 ms,     93947 ps/instr,     10 MIPS,     225.4 clk
+x86 sim in C ver f :   10173 ms,    105968 ps/instr,      9 MIPS,     254.3 clk
+x86 sim in C ver g :   10385 ms,    108177 ps/instr,      9 MIPS,     259.6 clk
+x86 sim in C ver h :    9522 ms,     99187 ps/instr,     10 MIPS,     238.0 clk
+x86 sim in C ver i :   11098 ms,    115604 ps/instr,      8 MIPS,     277.4 clk
+x86 sim in C ver j :    9934 ms,    103479 ps/instr,      9 MIPS,     248.3 clk
+x86 sim in C ver k :   11775 ms,    122656 ps/instr,      8 MIPS,     294.4 clk
+x86 sim in C ver l :    4317 ms,     44968 ps/instr,     22 MIPS,     107.9 clk
+x86 sim in C ver m :    4466 ms,     46520 ps/instr,     21 MIPS,     111.6 clk
+x86 sim in C ver n :    4742 ms,     49395 ps/instr,     20 MIPS,     118.5 clk
+x86 sim in C ver o :    4736 ms,     49333 ps/instr,     20 MIPS,     118.4 clk
+
+Peak guest instruction simulation rate at 2400 MHz = ~120 MIPS.
+
+===============================================================================
+
+Intel Pentium 4, 2000 MHz, VS2003 compiler:
+
+x86 native loop    :     748 ms,      7791 ps/instr,    128 MIPS,      15.5 clk
+x86 simulated loop :    7598 ms,     79145 ps/instr,     12 MIPS,     158.3 clk
+x86 sim in C ver a :   16867 ms,    175697 ps/instr,      5 MIPS,     351.4 clk
+x86 sim in C ver b :   16813 ms,    175135 ps/instr,      5 MIPS,     350.3 clk
+x86 sim in C ver c :   23469 ms,    244468 ps/instr,      4 MIPS,     488.9 clk
+x86 sim in C ver d :   25407 ms,    264656 ps/instr,      3 MIPS,     529.3 clk
+x86 sim in C ver e :   23928 ms,    249250 ps/instr,      4 MIPS,     498.5 clk
+x86 sim in C ver f :   16361 ms,    170427 ps/instr,      5 MIPS,     340.8 clk
+x86 sim in C ver g :   29617 ms,    308510 ps/instr,      3 MIPS,     617.0 clk
+x86 sim in C ver h :   26368 ms,    274666 ps/instr,      3 MIPS,     549.4 clk
+x86 sim in C ver i :   34225 ms,    356510 ps/instr,      2 MIPS,     713.2 clk
+x86 sim in C ver j :   28932 ms,    301375 ps/instr,      3 MIPS,     602.7 clk
+x86 sim in C ver k :   34242 ms,    356687 ps/instr,      2 MIPS,     713.5 clk
+x86 sim in C ver l :    6177 ms,     64343 ps/instr,     15 MIPS,     128.6 clk
+x86 sim in C ver m :    7006 ms,     72979 ps/instr,     13 MIPS,     145.9 clk
+x86 sim in C ver n :    6992 ms,     72833 ps/instr,     13 MIPS,     145.6 clk
+x86 sim in C ver o :    6952 ms,     72416 ps/instr,     13 MIPS,     144.8 clk
+
+Peak guest instruction simulation rate at 2000 MHz = ~83 MIPS.
+
+===============================================================================
+
+Mobile Intel processor in ASUS EEE, 630 MHz, VS2003 compiler:
+
+x86 native loop    :     941 ms,      9802 ps/instr,    102 MIPS,       6.1 clk
+x86 simulated loop :    9681 ms,    100843 ps/instr,      9 MIPS,      63.5 clk
+x86 sim in C ver a :   23513 ms,    244927 ps/instr,      4 MIPS,     154.3 clk
+x86 sim in C ver b :   22783 ms,    237322 ps/instr,      4 MIPS,     149.5 clk
+x86 sim in C ver c :    7985 ms,     83177 ps/instr,     12 MIPS,      52.4 clk
+x86 sim in C ver d :   26794 ms,    279104 ps/instr,      3 MIPS,     175.8 clk
+x86 sim in C ver e :   15887 ms,    165489 ps/instr,      6 MIPS,     104.2 clk
+x86 sim in C ver f :   26844 ms,    279625 ps/instr,      3 MIPS,     176.1 clk
+x86 sim in C ver g :   16588 ms,    172791 ps/instr,      5 MIPS,     108.8 clk
+x86 sim in C ver h :    8679 ms,     90406 ps/instr,     11 MIPS,      56.9 clk
+x86 sim in C ver i :   31482 ms,    327937 ps/instr,      3 MIPS,     206.6 clk
+x86 sim in C ver j :    9026 ms,     94020 ps/instr,     10 MIPS,      59.2 clk
+x86 sim in C ver k :   16238 ms,    169145 ps/instr,      5 MIPS,     106.5 clk
+x86 sim in C ver l :    7876 ms,     82041 ps/instr,     12 MIPS,      51.6 clk
+x86 sim in C ver m :    8142 ms,     84812 ps/instr,     11 MIPS,      53.4 clk
+x86 sim in C ver n :    9818 ms,    102270 ps/instr,      9 MIPS,      64.4 clk
+x86 sim in C ver o :    9690 ms,    100937 ps/instr,      9 MIPS,      63.5 clk
+
+Peak guest instruction simulation rate at 630 MHz = ~60 MIPS.
+
+===============================================================================
+
+Intel Atom in Acer Asprire One, 1600 MHz, VS2003 compiler:
+
+x86 native loop    :     302 ms,      3145 ps/instr,    317 MIPS,       5.0 clk
+x86 simulated loop :   14722 ms,    153354 ps/instr,      6 MIPS,     245.3 clk
+x86 sim in C ver a :   14249 ms,    148427 ps/instr,      6 MIPS,     237.4 clk
+x86 sim in C ver b :   13768 ms,    143416 ps/instr,      6 MIPS,     229.4 clk
+x86 sim in C ver c :   17594 ms,    183270 ps/instr,      5 MIPS,     293.2 clk
+x86 sim in C ver d :   23210 ms,    241770 ps/instr,      4 MIPS,     386.8 clk
+x86 sim in C ver e :   19115 ms,    199114 ps/instr,      5 MIPS,     318.5 clk
+x86 sim in C ver f :   14491 ms,    150947 ps/instr,      6 MIPS,     241.5 clk
+x86 sim in C ver g :   18485 ms,    192552 ps/instr,      5 MIPS,     308.1 clk
+x86 sim in C ver h :   17624 ms,    183583 ps/instr,      5 MIPS,     293.7 clk
+x86 sim in C ver i :   21866 ms,    227770 ps/instr,      4 MIPS,     364.4 clk
+x86 sim in C ver j :   19232 ms,    200333 ps/instr,      4 MIPS,     320.5 clk
+x86 sim in C ver k :   22785 ms,    237343 ps/instr,      4 MIPS,     379.7 clk
+x86 sim in C ver l :    9108 ms,     94875 ps/instr,     10 MIPS,     151.8 clk
+x86 sim in C ver m :    6145 ms,     64010 ps/instr,     15 MIPS,     102.4 clk
+x86 sim in C ver n :    7295 ms,     75989 ps/instr,     13 MIPS,     121.5 clk
+x86 sim in C ver o :    6691 ms,     69697 ps/instr,     14 MIPS,     111.5 clk
+
+Peak guest instruction simulation rate at 1600 MHz = ~86 MIPS.
+
+===============================================================================
+
+Intel Pentium III, 1000 MHz, VS2003 compiler:
+
+x86 native loop    :     640 ms,      6666 ps/instr,    150 MIPS,       6.6 clk
+x86 simulated loop :    8115 ms,     84531 ps/instr,     11 MIPS,      84.5 clk
+x86 sim in C ver a :   18624 ms,    194000 ps/instr,      5 MIPS,     194.0 clk
+x86 sim in C ver b :   18287 ms,    190489 ps/instr,      5 MIPS,     190.5 clk
+x86 sim in C ver c :   18287 ms,    190489 ps/instr,      5 MIPS,     190.5 clk
+x86 sim in C ver d :   23934 ms,    249312 ps/instr,      4 MIPS,     249.3 clk
+x86 sim in C ver e :   18670 ms,    194479 ps/instr,      5 MIPS,     194.5 clk
+x86 sim in C ver f :   19147 ms,    199447 ps/instr,      5 MIPS,     199.4 clk
+x86 sim in C ver g :   22181 ms,    231052 ps/instr,      4 MIPS,     231.0 clk
+x86 sim in C ver h :   19245 ms,    200468 ps/instr,      4 MIPS,     200.4 clk
+x86 sim in C ver i :   24702 ms,    257312 ps/instr,      3 MIPS,     257.3 clk
+x86 sim in C ver j :   20297 ms,    211427 ps/instr,      4 MIPS,     211.4 clk
+x86 sim in C ver k :   25567 ms,    266322 ps/instr,      3 MIPS,     266.3 clk
+x86 sim in C ver l :    6655 ms,     69322 ps/instr,     14 MIPS,      69.3 clk
+x86 sim in C ver m :    7470 ms,     77812 ps/instr,     12 MIPS,      77.8 clk
+x86 sim in C ver n :    7565 ms,     78802 ps/instr,     12 MIPS,      78.8 clk
+x86 sim in C ver o :    7469 ms,     77802 ps/instr,     12 MIPS,      77.8 clk
+
+Peak guest instruction simulation rate at 1000 MHz = ~77 MIPS.
+
+===============================================================================
+
+PowerPC based PowerMac G5, 2000 MHz, gcc 4.2 compiler:
+
+x86 sim in C ver a :   12078 ms,    125812 ps/instr,      7 MIPS,     251.6 clk
+x86 sim in C ver b :   11524 ms,    120041 ps/instr,      8 MIPS,     240.0 clk
+x86 sim in C ver c :   11885 ms,    123802 ps/instr,      8 MIPS,     247.6 clk
+x86 sim in C ver d :   16907 ms,    176114 ps/instr,      5 MIPS,     352.2 clk
+x86 sim in C ver e :   13983 ms,    145656 ps/instr,      6 MIPS,     291.3 clk
+x86 sim in C ver f :   11018 ms,    114770 ps/instr,      8 MIPS,     229.5 clk
+x86 sim in C ver g :   14827 ms,    154447 ps/instr,      6 MIPS,     308.9 clk
+x86 sim in C ver h :   11939 ms,    124364 ps/instr,      8 MIPS,     248.7 clk
+x86 sim in C ver i :   15093 ms,    157218 ps/instr,      6 MIPS,     314.4 clk
+x86 sim in C ver j :   14296 ms,    148916 ps/instr,      6 MIPS,     297.8 clk
+x86 sim in C ver k :   15815 ms,    164739 ps/instr,      6 MIPS,     329.4 clk
+x86 sim in C ver l :   12224 ms,    127333 ps/instr,      7 MIPS,     254.6 clk
+x86 sim in C ver m :   12242 ms,    127520 ps/instr,      7 MIPS,     255.0 clk
+x86 sim in C ver n :    5811 ms,     60531 ps/instr,     16 MIPS,     121.0 clk
+x86 sim in C ver o :    7225 ms,     75260 ps/instr,     13 MIPS,     150.5 clk
+
+Peak guest instruction simulation rate at 2000 MHz = ~99 MIPS.
+
+===============================================================================
